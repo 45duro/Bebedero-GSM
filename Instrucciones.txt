@@ -1,0 +1,8 @@
+**xxxxxxxx*! = cambiar el numero del usuario
+*#xxxxxxxx*! = cambiar el numero del cliente
+
+*?xxx*! = Cambiar la medida del sensor minima
+*$xxx*! = Cambiar la medida del sensor maxima
+
+
+*%? = mostrar la configuracion del sistema
