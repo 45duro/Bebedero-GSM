@@ -1,0 +1,6 @@
+{
+    "board": "arduino:avr:uno",
+    "port": "COM8",
+    "programmer": "AVRISP mkII",
+    "sketch": "bebedero\\bebedero.ino"
+}
