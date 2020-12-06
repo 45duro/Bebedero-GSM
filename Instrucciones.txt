@@ -6,3 +6,10 @@
 
 
 *%? = mostrar la configuracion del sistema
+
+!!!ON = cliente sensar
+!!#OFF = Dejar de sensar
+
+
+@@1*! = cliente pide carga de agua
+@#0*! = cliente pide dejar de dispensar agua

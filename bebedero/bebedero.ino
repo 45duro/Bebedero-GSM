@@ -1,5 +1,19 @@
 #include <EEPROM.h>
 #include <SoftwareSerial.h>
+#include <HCSR04.h>
+
+#define TRIGGER_PIN  2  // Arduino pin tied to trigger pin on the ultrasonic sensor.
+#define ECHO_PIN     3  // Arduino pin tied to echo pin on the ultrasonic sensor.
+#define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum 
+#define samples 5
+
+UltraSonicDistanceSensor distanceSensor(2, 3); 
+int averageMeasure = 0;
+
+char On = '*'; //on
+char Off = '#'; //off
+boolean Flag = 0, sms = 0;
+const byte Piloto = 5;
 
 //Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(8, 7); //SIM800L Tx & Rx is connected to Arduino #8 & #7
@@ -24,6 +38,7 @@ Settings Configuracion;
 void setup() {
   //Delay para evitar las fluctuaciones de corriente que evitan que funcione correctamente
   delay(4000);
+  pinMode(Piloto, OUTPUT);
   //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(9600);
   LecturaDeEEPROM();
@@ -75,6 +90,7 @@ void setup() {
 void loop()
 {
   updateSerial();
+  Estado();
 }
 
 void updateSerial()
@@ -113,6 +129,14 @@ void updateSerial()
       else if(datoMensaje.indexOf("*%?")>0)
       {  
         inicio = datoMensaje.indexOf("*%?");
+      }
+      else if(datoMensaje.indexOf("!!!ON")>0)
+      {  
+        inicio = datoMensaje.indexOf("!!!ON");
+      }
+      else if(datoMensaje.indexOf("!!#OFF")>0)
+      {  
+        inicio = datoMensaje.indexOf("!!#OFF");
       }
       fin = datoMensaje.indexOf("*!");
       
@@ -167,6 +191,7 @@ void updateSerial()
 
       }
       else if(datoMensaje.startsWith("*%?", inicio)){
+        
         Serial.print("Ver datos en EEPROM");
         LecturaDeEEPROM();
 
@@ -201,6 +226,18 @@ void updateSerial()
 
       }
 
+      else if(datoMensaje.startsWith("!!!ON"), inicio){
+        Serial.println( "Iniciando Sensado");
+        enviarMSNtxt("Iniciando el Sensado", Configuracion.NumeroTelefonicoUsuario);
+        Flag = 1;
+      }
+      else if(datoMensaje.startsWith("!!#OFF"), inicio){
+        Serial.println("Finalizando Sensado");
+        Flag = 0;
+        enviarMSNtxt("Terminando el sensado", Configuracion.NumeroTelefonicoUsuario);
+      }
+
+      
       datoMensaje="";
     
 
@@ -244,4 +281,41 @@ void enviarMSNtxt(String txt, char telefono[]){
   
   mySerial.write(26);
 
+}
+
+int average (){
+  for(byte i = 0; i < samples; i++){
+    delay(100);
+    averageMeasure += distanceSensor.measureDistanceCm();     
+  }
+  
+  int medidaFinal = averageMeasure/samples;
+  averageMeasure = 0;
+  return medidaFinal;
+}
+
+
+
+
+void Estado(){
+  if (Flag == 1){
+    int Sensor = average();
+    Serial.print("Sensor: ");
+    Serial.println(Sensor);
+    if ( (Sensor > 130) and (Sensor < Configuracion.levelMAX ) and (sms == 0) ){
+            Serial.println("Nivel Bajo");
+            enviarMSNtxt("@@1*!", Configuracion.NumeroTelefonicoServer);
+            delay(500);
+            sms = 1;
+            analogWrite(Piloto,200);
+          }
+
+    if ( (Sensor > 10) and (Sensor < Configuracion.levelMIN ) and (sms == 1)  ){
+           Serial.println("Nivel Alto");
+           enviarMSNtxt("@#0*!", Configuracion.NumeroTelefonicoServer);
+           delay(500);
+           sms = 0;
+           analogWrite(Piloto,0);
+         }
+  }
 }
