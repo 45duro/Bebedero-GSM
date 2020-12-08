@@ -13,3 +13,7 @@
 
 @@1*! = cliente pide carga de agua
 @#0*! = cliente pide dejar de dispensar agua
+
+
+&&&ON_BOMBA*! = Server avisa que la bomba se encendio mediante un msn de texto
+&&&OFF_BOMBA*! = Server avisa que la bomba se encendio mediante un msn de texto

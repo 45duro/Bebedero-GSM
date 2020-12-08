@@ -2,11 +2,8 @@
 #include <SoftwareSerial.h>
 
 
-
-char On = '*'; //on
-char Off = '#'; //off
-boolean Flag = 0, sms = 0;
-const byte Piloto = 5;
+boolean Flag = 0, sms = 0; //Flag es el estado de la bomba en el server
+const byte Piloto = 13, bomba = 12;
 
 //Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(8, 7); //SIM800L Tx & Rx is connected to Arduino #8 & #7
@@ -20,7 +17,7 @@ String datoMensaje = "";
 // ****************************
 struct Settings{
   char NumeroTelefonicoUsuario[11];
-  char NumeroTelefonicoServer[11];
+  char NumeroTelefonicoCliente[11];
 
   int levelMAX, levelMIN;
 
@@ -32,6 +29,7 @@ void setup() {
   //Delay para evitar las fluctuaciones de corriente que evitan que funcione correctamente
   delay(4000);
   pinMode(Piloto, OUTPUT);
+  pinMode(bomba, OUTPUT);
   //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(9600);
   LecturaDeEEPROM();
@@ -64,15 +62,15 @@ void setup() {
   
   mySerial.println("AT+CNMI=2,2"); // Configuring TEXT mode
   updateSerial();
+
+  mySerial.println("AT+CLIP=1"); // Mostrar quien llama
+  updateSerial();
   
-  Serial.print("numero del server "); Serial.println(Configuracion.NumeroTelefonicoUsuario); 
-  //String mensage = "AT+CMGS=\"" + String(Configuracion.NumeroTelefonicoUsuario) + "\"";
-  //mySerial.println(mensage);//change ZZ with country code and xxxxxxxxxxx with phone number to sms
-  //updateSerial();
   
-  //mensage = "Sistema de bebedero Medidor de nivel encendido, enviando set de encendido al Server";
-  //mySerial.print(mensage); //text content
-  //updateSerial();
+
+  enviarMSNtxt("!!!ON", Configuracion.NumeroTelefonicoCliente);
+  updateSerial();
+  
   
   //mySerial.write(26);
 
@@ -123,14 +121,25 @@ void updateSerial()
       {  
         inicio = datoMensaje.indexOf("*%?");
       }
-      else if(datoMensaje.indexOf("!!!ON")>0)
+      else if(datoMensaje.indexOf("@@1*!")>0)
       {  
-        inicio = datoMensaje.indexOf("!!!ON");
+        inicio = datoMensaje.indexOf("@@1*!");
       }
-      else if(datoMensaje.indexOf("!!#OFF")>0)
+      else if(datoMensaje.indexOf("@#0*!")>0)
       {  
-        inicio = datoMensaje.indexOf("!!#OFF");
+        inicio = datoMensaje.indexOf("@#0*!");
       }
+      else if(datoMensaje.indexOf("+CLIP:")>0  && datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoCliente))>0)
+      {
+        Serial.println ("Reconociendo la llamada");
+        mySerial.println("ATH");
+        if(Flag == 0)
+          Flag = 1;
+        else if(Flag == 1)
+          Flag = 0;
+      }
+
+
       fin = datoMensaje.indexOf("*!");
       
 
@@ -149,10 +158,10 @@ void updateSerial()
         
         String x =  datoMensaje.substring(inicio + 2, fin);
         Serial.print("extraccion: "); Serial.println(x); 
-        x.toCharArray(Configuracion.NumeroTelefonicoServer, 33);
+        x.toCharArray(Configuracion.NumeroTelefonicoCliente, 33);
         
         Serial.print("Cambiar el numero de usuario a: ");
-        Serial.write(Configuracion.NumeroTelefonicoServer);
+        Serial.write(Configuracion.NumeroTelefonicoCliente);
         GuardarEnEEPROM();
         
       }
@@ -183,6 +192,7 @@ void updateSerial()
         }
 
       }
+      
       else if(datoMensaje.startsWith("*%?", inicio)){
         
         Serial.print("Ver datos en EEPROM");
@@ -199,7 +209,7 @@ void updateSerial()
         //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
         
         txt += "Canal Servidor: ";
-        txt += Configuracion.NumeroTelefonicoServer;
+        txt += Configuracion.NumeroTelefonicoCliente;
         txt += "\n";
         
         //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
@@ -219,15 +229,25 @@ void updateSerial()
 
       }
 
-      else if(datoMensaje.startsWith("!!!ON"), inicio){
-        Serial.println( "Iniciando Sensado");
-        enviarMSNtxt("Iniciando el Sensado", Configuracion.NumeroTelefonicoUsuario);
-        Flag = 1;
-      }
-      else if(datoMensaje.startsWith("!!#OFF"), inicio){
-        Serial.println("Finalizando Sensado");
+      else if(datoMensaje.startsWith("@#0*!", inicio)){
+        Serial.println( "APAGANDO BOMBA");
+        out_Bomba(0);
         Flag = 0;
-        enviarMSNtxt("Terminando el sensado", Configuracion.NumeroTelefonicoUsuario);
+        enviarMSNtxt("&&&OFF_BOMBA*!", Configuracion.NumeroTelefonicoCliente);
+      }
+
+      else if(datoMensaje.startsWith("@@1*!", inicio)){
+        Serial.println("ENCENDIENDO BOMBA");
+        out_Bomba(1);
+        Flag = 1;
+        enviarMSNtxt("&&&ON_BOMBA*!", Configuracion.NumeroTelefonicoCliente);
+      }
+
+      if(Flag){
+        out_Bomba(1);
+      }
+      else{
+        out_Bomba(0);
       }
 
       
@@ -246,7 +266,7 @@ void LecturaDeEEPROM(){
   //Configuracion = MiObjetoResultado;
 
   Serial.println(Configuracion.NumeroTelefonicoUsuario);
-  Serial.println(Configuracion.NumeroTelefonicoServer);
+  Serial.println(Configuracion.NumeroTelefonicoCliente);
   Serial.println(Configuracion.levelMIN);
   Serial.println(Configuracion.levelMAX);
 }
@@ -273,5 +293,18 @@ void enviarMSNtxt(String txt, char telefono[]){
   updateSerial();
   
   mySerial.write(26);
+
+}
+
+void out_Bomba(boolean status)
+{
+  if(status){
+    digitalWrite(Piloto, 1);
+    digitalWrite(bomba, 1);
+  }
+  else{
+    digitalWrite(Piloto, 0);
+    digitalWrite(bomba, 0);
+  }
 
 }
