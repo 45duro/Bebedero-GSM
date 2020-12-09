@@ -27,7 +27,7 @@ Settings Configuracion;
 
 void setup() {
   //Delay para evitar las fluctuaciones de corriente que evitan que funcione correctamente
-  delay(4000);
+  delay(5000);
   pinMode(Piloto, OUTPUT);
   pinMode(bomba, OUTPUT);
   //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)

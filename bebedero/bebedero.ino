@@ -12,8 +12,11 @@ int averageMeasure = 0;
 
 char On = '*'; //on
 char Off = '#'; //off
-boolean Flag = 0, sms = 0;
+boolean Flag = 0, sms = 0, llamada = 0; 
 const byte Piloto = 5;
+short response = 0;
+
+unsigned int tiempo, tiempoPasado, tiempoDeLanzamientoMsn=0;
 
 //Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(8, 7); //SIM800L Tx & Rx is connected to Arduino #8 & #7
@@ -30,6 +33,7 @@ struct Settings{
   char NumeroTelefonicoServer[11];
 
   int levelMAX, levelMIN;
+  unsigned int intervaloEspera;
 
 };
 
@@ -70,6 +74,9 @@ void setup() {
   updateSerial();
   
   mySerial.println("AT+CNMI=2,2"); // Configuring TEXT mode
+  updateSerial();
+
+  mySerial.println("AT+CLIP=1"); // Mostrar quien llama
   updateSerial();
   
   Serial.print("numero del server "); Serial.println(Configuracion.NumeroTelefonicoUsuario); 
@@ -138,6 +145,28 @@ void updateSerial()
       {  
         inicio = datoMensaje.indexOf("!!#OFF");
       }
+      else if(datoMensaje.indexOf("&&&ON_BOMBA*!")>0)
+      { 
+        response = 1; 
+        inicio = datoMensaje.indexOf("&&&ON_BOMBA*!");
+      }
+      else if(datoMensaje.indexOf("&&&OFF_BOMBA*!")>0)
+      { 
+        response = 2; 
+        inicio = datoMensaje.indexOf("&&&OFF_BOMBA*!");
+      }
+      else if(datoMensaje.indexOf("NO CARRIER")>0)
+      { 
+        mySerial.println("ATH");
+      }
+      else if((datoMensaje.indexOf("*T")>0))
+      {
+        inicio = datoMensaje.indexOf("*T");
+      }
+      else if(datoMensaje.indexOf("*Level?")>0){
+        enviarMSNtxt("Nivel: " + String(average()), Configuracion.NumeroTelefonicoUsuario);
+      }
+
       fin = datoMensaje.indexOf("*!");
       
 
@@ -161,6 +190,22 @@ void updateSerial()
         Serial.print("Cambiar el numero de usuario a: ");
         Serial.write(Configuracion.NumeroTelefonicoServer);
         GuardarEnEEPROM();
+        
+      }
+
+      else if(datoMensaje.startsWith("*T", inicio) && datoMensaje.endsWith("*!")){
+        
+        String x =  datoMensaje.substring(inicio + 2, fin); 
+        Serial.println("Received: " + x);
+
+        if(x.toInt() < 60000 && x.toInt()> 10000){
+          Configuracion.intervaloEspera = x.toInt();
+          Serial.print("Estableciendo nivel intervalo de lamada seguridad a: ");
+          Serial.println(Configuracion.intervaloEspera);
+
+          GuardarEnEEPROM();
+        }
+        
         
       }
       
@@ -226,21 +271,42 @@ void updateSerial()
 
       }
 
-      else if(datoMensaje.startsWith("!!!ON"), inicio){
+      else if(datoMensaje.startsWith("!!!ON", inicio)){
         Serial.println( "Iniciando Sensado");
         enviarMSNtxt("Iniciando el Sensado", Configuracion.NumeroTelefonicoUsuario);
+        delay(5000);
         Flag = 1;
       }
-      else if(datoMensaje.startsWith("!!#OFF"), inicio){
+      else if(datoMensaje.startsWith("!!#OFF", inicio)){
         Serial.println("Finalizando Sensado");
         Flag = 0;
         enviarMSNtxt("Terminando el sensado", Configuracion.NumeroTelefonicoUsuario);
       }
 
-      
+         
       datoMensaje="";
     
 
+  }
+
+  tiempo = millis();
+  //Serial.print("  respo: "); Serial.print(response);
+  //Serial.print("  t: "); Serial.print(tiempo); Serial.print(" Fot: "); Serial.print(tiempoDeLanzamientoMsn); Serial.print(" inter "); Serial.println(intervaloEspera);
+  
+  if(response == -1 && (tiempo - tiempoDeLanzamientoMsn > Configuracion.intervaloEspera)){
+    //llame
+    Serial.println("Estoy ingresando a llamar");
+    mySerial.println("ATD" + String(Configuracion.NumeroTelefonicoServer)+ ";");
+    llamada = 1;
+    response= 0;
+    tiempoPasado = tiempo;
+  }
+
+  if( llamada==1 &&  tiempo - tiempoPasado > 7000){
+    //colgar si se hizo una llamada
+    mySerial.println("ATH");
+    llamada = 0;
+    
   }
 
 }
@@ -306,16 +372,22 @@ void Estado(){
             Serial.println("Nivel Bajo");
             enviarMSNtxt("@@1*!", Configuracion.NumeroTelefonicoServer);
             delay(500);
+            tiempoDeLanzamientoMsn = millis();
             sms = 1;
             analogWrite(Piloto,200);
+            response = -1;
+            
           }
 
     if ( (Sensor > 10) and (Sensor < Configuracion.levelMIN ) and (sms == 1)  ){
            Serial.println("Nivel Alto");
            enviarMSNtxt("@#0*!", Configuracion.NumeroTelefonicoServer);
            delay(500);
+           tiempoDeLanzamientoMsn = millis();
            sms = 0;
            analogWrite(Piloto,0);
+           response = -1;
          }
+
   }
 }

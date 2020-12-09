@@ -3,7 +3,8 @@
 
 *?xxx*! = Cambiar la medida del sensor minima
 *$xxx*! = Cambiar la medida del sensor maxima
-
+*Txxxxx*! = Cambiar el intervalo de tiempo seguridad en caso de no recibir el mensaje o perdida
+*Level?  = muestra el nivel del tanque
 
 *%? = mostrar la configuracion del sistema
 
