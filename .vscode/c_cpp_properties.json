@@ -8,10 +8,12 @@
                 "C:\\Users\\Administrador\\AppData\\Local\\Arduino15\\packages\\esp8266\\tools\\**",
                 "C:\\Users\\Administrador\\Documents\\Arduino\\libraries\\**",
                 "C:\\Program Files (x86)\\Arduino\\libraries\\**",
-                "C:\\Users\\Administrador\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\2.5.2\\**"
+                "C:\\Users\\Administrador\\AppData\\Local\\Arduino15\\packages\\esp8266\\hardware\\esp8266\\2.5.2\\**",
+                "C:\\Users\\Administrador\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.2\\**"
             ],
             "forcedInclude": [
-                "C:\\Users\\Administrador\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.1\\cores\\arduino\\Arduino.h"
+                "C:\\Users\\Administrador\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.1\\cores\\arduino\\Arduino.h",
+                "C:\\Users\\Administrador\\AppData\\Local\\Arduino15\\packages\\arduino\\hardware\\avr\\1.8.2\\cores\\arduino\\Arduino.h"
             ],
             "defines": [
                 "USBCON"
