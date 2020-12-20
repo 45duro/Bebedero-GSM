@@ -1,6 +1,6 @@
 **xxxxxxxx*! = cambiar el numero del usuario
 *#xxxxxxxx*! = cambiar el numero del cliente
-
+*@xxxxxxxx*! = cambiar el numero del usuario2
 *?xxx*! = Cambiar la medida del sensor minima
 *$xxx*! = Cambiar la medida del sensor maxima
 *Txxxxx*! = Cambiar el intervalo de tiempo seguridad en caso de no recibir el mensaje o perdida

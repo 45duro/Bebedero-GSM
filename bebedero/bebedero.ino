@@ -30,6 +30,7 @@ String datoMensaje = "";
 // ****************************
 struct Settings{
   char NumeroTelefonicoUsuario[11];
+  char NumeroTelefonicoUsuario2[11];
   char NumeroTelefonicoServer[11];
 
   int levelMAX, levelMIN;
@@ -79,16 +80,11 @@ void setup() {
   mySerial.println("AT+CLIP=1"); // Mostrar quien llama
   updateSerial();
   
-  Serial.print("numero del server "); Serial.println(Configuracion.NumeroTelefonicoUsuario); 
-  String mensage = "AT+CMGS=\"" + String(Configuracion.NumeroTelefonicoUsuario) + "\"";
-  mySerial.println(mensage);//change ZZ with country code and xxxxxxxxxxx with phone number to sms
-  updateSerial();
-  
-  mensage = "Sistema de bebedero Medidor de nivel encendido, enviando set de encendido al Server";
-  mySerial.print(mensage); //text content
-  updateSerial();
-  
-  mySerial.write(26);
+  for(byte i = 1;  i <= 2; i++){
+      msnInicio(i);
+      delay(10000);
+  }
+ 
 
 
 
@@ -133,6 +129,10 @@ void updateSerial()
       {  
         inicio = datoMensaje.indexOf("*$");
       }
+      else if(datoMensaje.indexOf("*@")>0)
+      {  
+        inicio = datoMensaje.indexOf("*@");
+      }
       else if(datoMensaje.indexOf("*%?")>0)
       {  
         inicio = datoMensaje.indexOf("*%?");
@@ -165,6 +165,8 @@ void updateSerial()
       }
       else if(datoMensaje.indexOf("*Level?")>0){
         enviarMSNtxt("Nivel: " + String(average()), Configuracion.NumeroTelefonicoUsuario);
+        delay(6000);
+        enviarMSNtxt("Nivel: " + String(average()), Configuracion.NumeroTelefonicoUsuario2);
       }
 
       fin = datoMensaje.indexOf("*!");
@@ -189,6 +191,18 @@ void updateSerial()
         
         Serial.print("Cambiar el numero de usuario a: ");
         Serial.write(Configuracion.NumeroTelefonicoServer);
+        GuardarEnEEPROM();
+        
+      }
+
+      else if(datoMensaje.startsWith("*@", inicio) && datoMensaje.endsWith("*!")){
+        
+        String x =  datoMensaje.substring(inicio + 2, fin);
+        Serial.print("extraccion: "); Serial.println(x); 
+        x.toCharArray(Configuracion.NumeroTelefonicoUsuario2, 33);
+        
+        Serial.print("Cambiar el numero de usuario a: ");
+        Serial.write(Configuracion.NumeroTelefonicoUsuario2);
         GuardarEnEEPROM();
         
       }
@@ -246,6 +260,11 @@ void updateSerial()
 
         txt = "Usuario Notificaciones: ";
         txt += Configuracion.NumeroTelefonicoUsuario;
+        txt += ", ";
+
+        //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
+
+        txt += Configuracion.NumeroTelefonicoUsuario2;
         txt += "\n";
 
         //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
@@ -267,6 +286,8 @@ void updateSerial()
         txt += "\n";
         
         enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
+        delay(10000);
+        enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario2);
 
 
       }
@@ -275,12 +296,15 @@ void updateSerial()
         Serial.println( "Iniciando Sensado");
         enviarMSNtxt("Iniciando el Sensado", Configuracion.NumeroTelefonicoUsuario);
         delay(5000);
+        enviarMSNtxt("Iniciando el Sensado", Configuracion.NumeroTelefonicoUsuario2);
         Flag = 1;
       }
       else if(datoMensaje.startsWith("!!#OFF", inicio)){
         Serial.println("Finalizando Sensado");
         Flag = 0;
         enviarMSNtxt("Terminando el sensado", Configuracion.NumeroTelefonicoUsuario);
+        delay(3000);
+        enviarMSNtxt("Terminando el sensado", Configuracion.NumeroTelefonicoUsuario2);
       }
 
          
@@ -319,6 +343,7 @@ void LecturaDeEEPROM(){
   //Configuracion = MiObjetoResultado;
 
   Serial.println(Configuracion.NumeroTelefonicoUsuario);
+  Serial.println(Configuracion.NumeroTelefonicoUsuario2);
   Serial.println(Configuracion.NumeroTelefonicoServer);
   Serial.println(Configuracion.levelMIN);
   Serial.println(Configuracion.levelMAX);
@@ -390,4 +415,39 @@ void Estado(){
          }
 
   }
+}
+
+
+void msnInicio(byte numberUser){
+  String mensage;
+  switch (numberUser)
+  {
+    case 1:
+      Serial.print("numero del Usuario1 "); Serial.println(Configuracion.NumeroTelefonicoUsuario); 
+      mensage = "AT+CMGS=\"" + String(Configuracion.NumeroTelefonicoUsuario) + "\"";
+      mySerial.println(mensage);//change ZZ with country code and xxxxxxxxxxx with phone number to sms
+      updateSerial();
+      
+      mensage = "Sistema de bebedero Medidor de nivel encendido, enviando set de encendido al Server";
+      mySerial.print(mensage); //text content
+      updateSerial();
+      
+      mySerial.write(26);
+    break;
+
+    case 2:
+      Serial.print("numero del Usuario2 "); Serial.println(Configuracion.NumeroTelefonicoUsuario2); 
+      mensage = "AT+CMGS=\"" + String(Configuracion.NumeroTelefonicoUsuario2) + "\"";
+      mySerial.println(mensage);//change ZZ with country code and xxxxxxxxxxx with phone number to sms
+      updateSerial();
+      
+      mensage = "Sistema de bebedero Medidor de nivel encendido, enviando set de encendido al Server";
+      mySerial.print(mensage); //text content
+      updateSerial();
+      
+      mySerial.write(26);
+    break;
+  
+  }
+    
 }

@@ -1,7 +1,6 @@
 #include <EEPROM.h>
 #include <SoftwareSerial.h>
 
-
 boolean Flag = 0, sms = 0; //Flag es el estado de la bomba en el server
 const byte Piloto = 13, bomba = 12;
 
@@ -9,6 +8,9 @@ const byte Piloto = 13, bomba = 12;
 SoftwareSerial mySerial(8, 7); //SIM800L Tx & Rx is connected to Arduino #8 & #7
 
 String datoMensaje = "";
+
+//Para llevar un conteo y estar preguntando sobre los AT comand
+volatile long tiempo=0, tiempo_pasado=0, intervalo = 36000000;
 
 // ****************************
 //                            *
@@ -18,8 +20,8 @@ String datoMensaje = "";
 struct Settings{
   char NumeroTelefonicoUsuario[11];
   char NumeroTelefonicoCliente[11];
-
-  int levelMAX, levelMIN;
+  char NumeroTelefonicoUsuario2[11];
+  int levelMAX, levelMIN;  
 
 };
 
@@ -42,30 +44,8 @@ void setup() {
   
 
 
-  mySerial.println("AT"); //Once the handshake test is successful, it will back to OK
-  updateSerial();
-  mySerial.println("AT+CSQ"); //Prueba de calidad de la señal, el rango de valores es 0-31, 31 es el mejor
-  updateSerial();
-  mySerial.println("AT+CCID"); //Lea la información de la SIM para confirmar si la SIM está conectada
-  updateSerial();
-  mySerial.println("AT+CREG?"); //Comprueba si se ha registrado en la red.
-  updateSerial();
-
-  mySerial.println("AT+CFUN=1"); // Configuring TEXT mode
-  updateSerial();
   
-  mySerial.println("AT+CMGF=1"); // Configuring TEXT mode
-  updateSerial();
-  
-  mySerial.println("AT+CMGR=?"); // Configuring TEXT mode
-  updateSerial();
-  
-  mySerial.println("AT+CNMI=2,2"); // Configuring TEXT mode
-  updateSerial();
-
-  mySerial.println("AT+CLIP=1"); // Mostrar quien llama
-  updateSerial();
-  
+  inicioSesion();
   
 
   enviarMSNtxt("!!!ON", Configuracion.NumeroTelefonicoCliente);
@@ -81,6 +61,12 @@ void setup() {
 void loop()
 {
   updateSerial();
+
+  tiempo = millis();
+  if(tiempo - tiempo_pasado > intervalo){
+    inicioSesion();
+    tiempo_pasado=tiempo;
+  }
 
 }
 
@@ -129,7 +115,11 @@ void updateSerial()
       {  
         inicio = datoMensaje.indexOf("@#0*!");
       }
-      else if(datoMensaje.indexOf("+CLIP:")>0  && datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoCliente))>0)
+      else if(datoMensaje.indexOf("*@")>0)
+      {  
+        inicio = datoMensaje.indexOf("*@");
+      }
+      else if(datoMensaje.indexOf("+CLIP:")>0  && (datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoCliente))>0 || datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoUsuario))>0 || datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoUsuario2))>0))
       {
         Serial.println ("Reconociendo la llamada");
         mySerial.println("ATH");
@@ -162,6 +152,18 @@ void updateSerial()
         
         Serial.print("Cambiar el numero de usuario a: ");
         Serial.write(Configuracion.NumeroTelefonicoCliente);
+        GuardarEnEEPROM();
+        
+      }
+
+       else if(datoMensaje.startsWith("*@", inicio) && datoMensaje.endsWith("*!")){
+        
+        String x =  datoMensaje.substring(inicio + 2, fin);
+        Serial.print("extraccion: "); Serial.println(x); 
+        x.toCharArray(Configuracion.NumeroTelefonicoUsuario2, 33);
+        
+        Serial.print("Cambiar el numero de usuario a: ");
+        Serial.write(Configuracion.NumeroTelefonicoUsuario2);
         GuardarEnEEPROM();
         
       }
@@ -204,11 +206,16 @@ void updateSerial()
 
         txt = "Usuario Notificaciones: ";
         txt += Configuracion.NumeroTelefonicoUsuario;
+        txt += ", ";
+
+        //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
+
+        txt += Configuracion.NumeroTelefonicoUsuario2;
         txt += "\n";
 
         //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
         
-        txt += "Canal Servidor: ";
+        txt += "Canal Cliente: ";
         txt += Configuracion.NumeroTelefonicoCliente;
         txt += "\n";
         
@@ -225,6 +232,8 @@ void updateSerial()
         txt += "\n";
         
         enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
+        delay(10000);
+        enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario2);
 
 
       }
@@ -266,6 +275,7 @@ void LecturaDeEEPROM(){
   //Configuracion = MiObjetoResultado;
 
   Serial.println(Configuracion.NumeroTelefonicoUsuario);
+  Serial.println(Configuracion.NumeroTelefonicoUsuario2);
   Serial.println(Configuracion.NumeroTelefonicoCliente);
   Serial.println(Configuracion.levelMIN);
   Serial.println(Configuracion.levelMAX);
@@ -306,5 +316,32 @@ void out_Bomba(boolean status)
     digitalWrite(Piloto, 0);
     digitalWrite(bomba, 0);
   }
+
+}
+
+void inicioSesion(){
+  mySerial.println("AT"); //Once the handshake test is successful, it will back to OK
+  updateSerial();
+  mySerial.println("AT+CSQ"); //Prueba de calidad de la señal, el rango de valores es 0-31, 31 es el mejor
+  updateSerial();
+  mySerial.println("AT+CCID"); //Lea la información de la SIM para confirmar si la SIM está conectada
+  updateSerial();
+  mySerial.println("AT+CREG?"); //Comprueba si se ha registrado en la red.
+  updateSerial();
+
+  mySerial.println("AT+CFUN=1"); // Configuring TEXT mode
+  updateSerial();
+  
+  mySerial.println("AT+CMGF=1"); // Configuring TEXT mode
+  updateSerial();
+  
+  mySerial.println("AT+CMGR=?"); // Configuring TEXT mode
+  updateSerial();
+  
+  mySerial.println("AT+CNMI=2,2"); // Configuring TEXT mode
+  updateSerial();
+
+  mySerial.println("AT+CLIP=1"); // Mostrar quien llama
+  updateSerial();
 
 }
