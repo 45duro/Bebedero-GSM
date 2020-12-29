@@ -3,8 +3,10 @@
 *@xxxxxxxx*! = cambiar el numero del usuario2
 *?xxx*! = Cambiar la medida del sensor minima
 *$xxx*! = Cambiar la medida del sensor maxima
-*Txxxxx*! = Cambiar el intervalo de tiempo seguridad en caso de no recibir el mensaje o perdida
+*Txxxxx*! = Cambiar el intervalo de tiempo en minutos seguridad en caso de no recibir el mensaje o perdida
+*txxxxx*! = Cambiar el intervalo de tiempo en minutos seguridad en caso de no recibir el mensaje o perdida
 *Level?  = muestra el nivel del tanque
+
 
 *%? = mostrar la configuracion del sistema
 
@@ -18,3 +20,6 @@
 
 &&&ON_BOMBA*! = Server avisa que la bomba se encendio mediante un msn de texto
 &&&OFF_BOMBA*! = Server avisa que la bomba se encendio mediante un msn de texto
+
+*sta=void = Función exclusiva para hacer mantenimiento, permite establecer el inicio de la medida si el tanque esta vacio
+*sta=full = Función exclusiva para hacer mantenimiento, permite establecer el inicio de la medida si el tanque esta lleno

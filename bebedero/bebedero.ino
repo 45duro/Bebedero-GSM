@@ -5,18 +5,18 @@
 #define TRIGGER_PIN  2  // Arduino pin tied to trigger pin on the ultrasonic sensor.
 #define ECHO_PIN     3  // Arduino pin tied to echo pin on the ultrasonic sensor.
 #define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum 
-#define samples 5
+#define samples 10
 
 UltraSonicDistanceSensor distanceSensor(2, 3); 
 int averageMeasure = 0;
 
 char On = '*'; //on
-char Off = '#'; //off
+short prenderBomba = -1, levelAnterior=0, temporizador=0, contador=0;
 boolean Flag = 0, sms = 0, llamada = 0; 
 const byte Piloto = 5;
 short response = 0;
 
-unsigned int tiempo, tiempoPasado, tiempoDeLanzamientoMsn=0;
+volatile uint32_t tiempo, tiempoPasado, tiempoDeLanzamientoMsn=0, tiempoPasado2=0;
 
 //Create software serial object to communicate with SIM800L
 SoftwareSerial mySerial(8, 7); //SIM800L Tx & Rx is connected to Arduino #8 & #7
@@ -34,7 +34,9 @@ struct Settings{
   char NumeroTelefonicoServer[11];
 
   int levelMAX, levelMIN;
-  unsigned int intervaloEspera;
+  unsigned int intervaloEsperaON; //intervalo en minutos
+  unsigned int intervaloEsperaOFF; //intervalo en minutos
+
 
 };
 
@@ -56,34 +58,13 @@ void setup() {
   
 
 
-  mySerial.println("AT"); //Once the handshake test is successful, it will back to OK
-  updateSerial();
-  mySerial.println("AT+CSQ"); //Prueba de calidad de la señal, el rango de valores es 0-31, 31 es el mejor
-  updateSerial();
-  mySerial.println("AT+CCID"); //Lea la información de la SIM para confirmar si la SIM está conectada
-  updateSerial();
-  mySerial.println("AT+CREG?"); //Comprueba si se ha registrado en la red.
-  updateSerial();
-
-  mySerial.println("AT+CFUN=1"); // Configuring TEXT mode
-  updateSerial();
-  
-  mySerial.println("AT+CMGF=1"); // Configuring TEXT mode
-  updateSerial();
-  
-  mySerial.println("AT+CMGR=?"); // Configuring TEXT mode
-  updateSerial();
-  
-  mySerial.println("AT+CNMI=2,2"); // Configuring TEXT mode
-  updateSerial();
-
-  mySerial.println("AT+CLIP=1"); // Mostrar quien llama
-  updateSerial();
+  configuracion();
   
   for(byte i = 1;  i <= 2; i++){
       msnInicio(i);
       delay(10000);
   }
+  
  
 
 
@@ -94,6 +75,7 @@ void loop()
 {
   updateSerial();
   Estado();
+  
 }
 
 void updateSerial()
@@ -163,11 +145,39 @@ void updateSerial()
       {
         inicio = datoMensaje.indexOf("*T");
       }
+      else if((datoMensaje.indexOf("*t")>0))
+      {
+        inicio = datoMensaje.indexOf("*t");
+      }
       else if(datoMensaje.indexOf("*Level?")>0){
         enviarMSNtxt("Nivel: " + String(average()), Configuracion.NumeroTelefonicoUsuario);
         delay(6000);
         enviarMSNtxt("Nivel: " + String(average()), Configuracion.NumeroTelefonicoUsuario2);
       }
+
+      else if(datoMensaje.indexOf("*sta=void")>0){
+        sms=0;
+      }
+
+      else if(datoMensaje.indexOf("*sta=full")>0){
+        sms=1;
+      }
+      /*
+      else if(datoMensaje.indexOf("*BAT?")>0){
+        mySerial.println("AT+CBC");
+        
+      }
+
+      else if(datoMensaje.indexOf("CBC:?")>0){
+        enviarMSNtxt("Bateria: " + datoMensaje, Configuracion.NumeroTelefonicoUsuario);
+        delay(10000);
+        enviarMSNtxt("Bateria: " + datoMensaje, Configuracion.NumeroTelefonicoUsuario2);
+        delay(3000);
+      }
+      */
+      
+
+     
 
       fin = datoMensaje.indexOf("*!");
       
@@ -212,17 +222,33 @@ void updateSerial()
         String x =  datoMensaje.substring(inicio + 2, fin); 
         Serial.println("Received: " + x);
 
-        if(x.toInt() < 60000 && x.toInt()> 10000){
-          Configuracion.intervaloEspera = x.toInt();
+        if(x.toInt() < 180 && x.toInt()>= 1){
+          Configuracion.intervaloEsperaON = x.toInt();
           Serial.print("Estableciendo nivel intervalo de lamada seguridad a: ");
-          Serial.println(Configuracion.intervaloEspera);
+          Serial.println(Configuracion.intervaloEsperaON);
+
+          GuardarEnEEPROM();
+        }
+
+      
+        
+        
+      }
+
+      else if(datoMensaje.startsWith("*t", inicio) && datoMensaje.endsWith("*!")){
+        
+        String x =  datoMensaje.substring(inicio + 2, fin); 
+        Serial.println("Received: " + x);
+
+        if(x.toInt() < 180 && x.toInt()>= 1){
+          Configuracion.intervaloEsperaOFF = x.toInt();
+          Serial.print("Estableciendo nivel intervalo de lamada seguridad a: ");
+          Serial.println(Configuracion.intervaloEsperaOFF);
 
           GuardarEnEEPROM();
         }
         
-        
       }
-      
       else if(datoMensaje.startsWith("*?", inicio) && datoMensaje.endsWith("*!")){
         String min = datoMensaje.substring(inicio + 2, fin);
         Serial.println("Received: " + min);
@@ -258,7 +284,7 @@ void updateSerial()
         
         String txt;
 
-        txt = "Usuario Notificaciones: ";
+        txt = "admin: ";
         txt += Configuracion.NumeroTelefonicoUsuario;
         txt += ", ";
 
@@ -269,20 +295,26 @@ void updateSerial()
 
         //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
         
-        txt += "Canal Servidor: ";
+        txt += "Ch server: ";
         txt += Configuracion.NumeroTelefonicoServer;
         txt += "\n";
         
         //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
 
-        txt += "Nivel Minimo Sensor: "; 
+        txt += "Min. Sensor: "; 
         txt += Configuracion.levelMIN;
         txt += "\n";
         
         //enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
         
-        txt += "Nivel Maximo Sensor: ";
+        txt += "Max. Sensor: ";
         txt += Configuracion.levelMAX;
+        txt += "\n";
+
+        txt += "Stop(ON, off): ";
+        txt += Configuracion.intervaloEsperaON;
+        txt += ",";
+        txt += Configuracion.intervaloEsperaOFF;
         txt += "\n";
         
         enviarMSNtxt(txt, Configuracion.NumeroTelefonicoUsuario);
@@ -295,16 +327,18 @@ void updateSerial()
       else if(datoMensaje.startsWith("!!!ON", inicio)){
         Serial.println( "Iniciando Sensado");
         enviarMSNtxt("Iniciando el Sensado", Configuracion.NumeroTelefonicoUsuario);
-        delay(5000);
+        delay(20000);
         enviarMSNtxt("Iniciando el Sensado", Configuracion.NumeroTelefonicoUsuario2);
         Flag = 1;
+        delay(20000);
       }
       else if(datoMensaje.startsWith("!!#OFF", inicio)){
         Serial.println("Finalizando Sensado");
         Flag = 0;
         enviarMSNtxt("Terminando el sensado", Configuracion.NumeroTelefonicoUsuario);
-        delay(3000);
+        delay(20000);
         enviarMSNtxt("Terminando el sensado", Configuracion.NumeroTelefonicoUsuario2);
+        delay(20000);
       }
 
          
@@ -312,6 +346,8 @@ void updateSerial()
     
 
   }
+
+  /*
 
   tiempo = millis();
   //Serial.print("  respo: "); Serial.print(response);
@@ -326,12 +362,14 @@ void updateSerial()
     tiempoPasado = tiempo;
   }
 
-  if( llamada==1 &&  tiempo - tiempoPasado > 7000){
+  if( llamada==1 &&  tiempo - tiempoPasado > 8000){
     //colgar si se hizo una llamada
     mySerial.println("ATH");
     llamada = 0;
     
   }
+
+  */
 
 }
 
@@ -347,6 +385,8 @@ void LecturaDeEEPROM(){
   Serial.println(Configuracion.NumeroTelefonicoServer);
   Serial.println(Configuracion.levelMIN);
   Serial.println(Configuracion.levelMAX);
+  Serial.println(Configuracion.intervaloEsperaON);
+  Serial.println(Configuracion.intervaloEsperaOFF);
 }
 
 void GuardarEnEEPROM(){
@@ -390,30 +430,102 @@ int average (){
 
 void Estado(){
   if (Flag == 1){
+    
     int Sensor = average();
     Serial.print("Sensor: ");
-    Serial.println(Sensor);
-    if ( (Sensor > 130) and (Sensor < Configuracion.levelMAX ) and (sms == 0) ){
-            Serial.println("Nivel Bajo");
-            enviarMSNtxt("@@1*!", Configuracion.NumeroTelefonicoServer);
-            delay(500);
-            tiempoDeLanzamientoMsn = millis();
+    Serial.print(Sensor);
+
+    Serial.print("  levelAnt: ");
+    Serial.print(levelAnterior);
+
+    Serial.print("  temporizador: ");
+    Serial.print(temporizador);
+
+    Serial.print("  sms: ");
+    Serial.println(sms);
+
+    tiempo = millis();
+    
+    if ( (Sensor < 160) and (Sensor > Configuracion.levelMAX ) and (sms == 0) ){
+
+            prenderBomba=1;
             sms = 1;
-            analogWrite(Piloto,200);
-            response = -1;
-            
+            tiempoPasado = tiempo;
+            temporizador = 1;
+            levelAnterior=Sensor;
+
+            //MAntenimiento descomentar para el proximo mantenimiento
+            //contador = 0;
           }
 
-    if ( (Sensor > 10) and (Sensor < Configuracion.levelMIN ) and (sms == 1)  ){
-           Serial.println("Nivel Alto");
-           enviarMSNtxt("@#0*!", Configuracion.NumeroTelefonicoServer);
-           delay(500);
-           tiempoDeLanzamientoMsn = millis();
-           sms = 0;
-           analogWrite(Piloto,0);
-           response = -1;
+    if ( (Sensor > 35) and (Sensor < Configuracion.levelMIN ) and (sms == 1)  ){
+            
+            prenderBomba =0;
+            sms = 0;
+            tiempoPasado = tiempo;
+            temporizador = 2;
+            levelAnterior=Sensor;
+            //Mantenimiento descomentar para el proximo mantenimiento
+            //contador = 0;
          }
 
+
+    if(prenderBomba==1){
+      Serial.println("Nivel Bajo");
+      llamadaServer();
+      
+      analogWrite(Piloto,200);
+      prenderBomba=-1;
+    }
+    else if(prenderBomba==0){
+      Serial.println("Nivel Alto");
+      llamadaServer();
+      
+      analogWrite(Piloto,0);
+      prenderBomba=-1;
+      
+    }
+
+    
+    if(((levelAnterior - Sensor)<-10) and (temporizador==1) and ((tiempo - tiempoPasado) > minToMilis(Configuracion.intervaloEsperaON))){
+        Serial.println("Entré en el reintento para encender");
+        prenderBomba=1;
+        contador++;
+
+        if (contador>=5){
+          enviarMSNtxt("La bomba no enciende despues de 5 intentos revisar",Configuracion.NumeroTelefonicoUsuario);
+          delay(8000);
+          enviarMSNtxt("La bomba no enciende despues de 5 intentos revisar",Configuracion.NumeroTelefonicoUsuario2);
+          contador=0;
+          temporizador=0;
+        }
+        levelAnterior=Sensor;
+        tiempoPasado=tiempo;
+
+        
+    }
+
+    if(((levelAnterior-Sensor)>2) and (temporizador==2) and ((tiempo - tiempoPasado) > minToMilis(Configuracion.intervaloEsperaOFF))){
+        Serial.println("Entré en el reintento apagar");
+        prenderBomba=0;
+        contador++;
+
+        if (contador>=7){
+          enviarMSNtxt("La bomba no enciende despues de 7 intentos revisar",Configuracion.NumeroTelefonicoUsuario);
+          delay(8000);
+          enviarMSNtxt("La bomba no enciende despues de 7 intentos revisar",Configuracion.NumeroTelefonicoUsuario2);
+          contador=0;
+          temporizador=0;
+        }
+        levelAnterior=Sensor;
+        tiempoPasado=tiempo;
+    }
+
+    
+    if((tiempo - tiempoPasado2) > minToMilis(120)){
+        configuracion();
+        tiempoPasado2=tiempo;
+    }
   }
 }
 
@@ -450,4 +562,46 @@ void msnInicio(byte numberUser){
   
   }
     
+}
+
+
+void configuracion(){
+  mySerial.println("AT"); //Once the handshake test is successful, it will back to OK
+  updateSerial();
+  mySerial.println("AT+CSQ"); //Prueba de calidad de la señal, el rango de valores es 0-31, 31 es el mejor
+  updateSerial();
+  mySerial.println("AT+CCID"); //Lea la información de la SIM para confirmar si la SIM está conectada
+  updateSerial();
+  mySerial.println("AT+CREG?"); //Comprueba si se ha registrado en la red.
+  updateSerial();
+
+  mySerial.println("AT+CFUN=1"); // Configuring TEXT mode
+  updateSerial();
+  
+  mySerial.println("AT+CMGF=1"); // Configuring TEXT mode
+  updateSerial();
+  
+  mySerial.println("AT+CMGR=?"); // Configuring TEXT mode
+  updateSerial();
+  
+  mySerial.println("AT+CNMI=2,2"); // Configuring TEXT mode
+  updateSerial();
+
+  mySerial.println("AT+CLIP=1"); // Mostrar quien llama
+  updateSerial();
+}
+
+void llamadaServer(){
+  
+  Serial.println("Estoy ingresando a llamar");
+  mySerial.println("ATD" + String(Configuracion.NumeroTelefonicoServer)+ ";");
+  
+  delay(9000);
+  
+  //Colgar
+  mySerial.println("ATH");
+}
+
+uint32_t minToMilis(unsigned int x){
+  return x*60000;
 }
