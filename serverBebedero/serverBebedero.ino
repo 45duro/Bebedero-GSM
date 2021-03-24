@@ -1,6 +1,10 @@
 #include <EEPROM.h>
 #include <SoftwareSerial.h>
 
+# define ReleNegado true
+
+
+
 boolean Flag = 0, sms = 0; //Flag es el estado de la bomba en el server
 const byte Piloto = 13, bomba = 12;
 
@@ -32,6 +36,10 @@ void setup() {
   delay(5000);
   pinMode(Piloto, OUTPUT);
   pinMode(bomba, OUTPUT);
+  //Por Seguridad apagado de bomba, evitando golpes de ariete etc
+  out_Bomba(false);
+
+  
   //Begin serial communication with Arduino and Arduino IDE (Serial Monitor)
   Serial.begin(9600);
   LecturaDeEEPROM();
@@ -123,13 +131,57 @@ void updateSerial()
       {
         Serial.println ("Reconociendo la llamada");
         mySerial.println("ATH");
-        if(Flag == 0)
+
+        
+        
+        
+
+        
+        if(Flag == 0){
           Flag = 1;
-        else if(Flag == 1)
+          //Buscar quien llamó para enviarle el mensaje de confirmación
+          if(datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoCliente))>0){
+            enviarMSNtxt("Sistema encendido y dispensando agua", Configuracion.NumeroTelefonicoCliente);
+          }
+          else if(datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoUsuario))>0){
+            enviarMSNtxt("Sistema encendido y dispensando agua", Configuracion.NumeroTelefonicoUsuario);
+          }
+          else if(datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoUsuario2))>0){
+            enviarMSNtxt("Sistema encendido y dispensando agua", Configuracion.NumeroTelefonicoUsuario2);
+          }
+      
+        }
+        else if(Flag == 1){
           Flag = 0;
+          //Buscar quien llamó para enviarle el mensaje de confirmación
+          if(datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoCliente))>0){
+            enviarMSNtxt("Sistema apagado\nNo agua", Configuracion.NumeroTelefonicoCliente);
+          }
+          else if(datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoUsuario))>0){
+            enviarMSNtxt("Sistema apagado\nNo agua", Configuracion.NumeroTelefonicoUsuario);
+          }
+          else if(datoMensaje.indexOf(String(Configuracion.NumeroTelefonicoUsuario2))>0){
+            enviarMSNtxt("Sistema apagado\nNo agua", Configuracion.NumeroTelefonicoUsuario2);
+          }
+        }
       }
-
-
+      else if(datoMensaje.indexOf("status")>0){
+        if(Flag){
+          enviarMSNtxt("Sistema encendido\ndispensando agua", Configuracion.NumeroTelefonicoUsuario);
+          delay(6000);
+          enviarMSNtxt("Sistema encendido\ndispensando agua", Configuracion.NumeroTelefonicoUsuario2);
+          delay(6000);
+          enviarMSNtxt("Sistema encendido\ndispensando agua", Configuracion.NumeroTelefonicoCliente);
+        }
+        else{
+          enviarMSNtxt("Sistema apagado\nNo agua", Configuracion.NumeroTelefonicoUsuario);
+          delay(6000);
+          enviarMSNtxt("Sistema apagado\nNo agua", Configuracion.NumeroTelefonicoUsuario2);
+          delay(6000);
+          enviarMSNtxt("Sistema apagado\nNo agua", Configuracion.NumeroTelefonicoCliente);
+        }
+                  
+      }
       fin = datoMensaje.indexOf("*!");
       
 
@@ -200,7 +252,6 @@ void updateSerial()
         Serial.print("Ver datos en EEPROM");
         LecturaDeEEPROM();
 
-        //enviarMSNtxt("Joder Tio", Configuracion.NumeroTelefonicoUsuario);
         
         String txt;
 
@@ -308,14 +359,28 @@ void enviarMSNtxt(String txt, char telefono[]){
 
 void out_Bomba(boolean status)
 {
-  if(status){
-    digitalWrite(Piloto, 1);
-    digitalWrite(bomba, 1);
-  }
-  else{
-    digitalWrite(Piloto, 0);
-    digitalWrite(bomba, 0);
-  }
+  
+  #if ReleNegado == true 
+    if(status){
+      digitalWrite(Piloto, 1);
+      digitalWrite(bomba, 0);
+    }
+    else{
+      digitalWrite(Piloto, 0);
+      digitalWrite(bomba, 1);
+    }
+  #else
+    if(status){
+      digitalWrite(Piloto, 1);
+      digitalWrite(bomba, 1);
+    }
+    else{
+      digitalWrite(Piloto, 0);
+      digitalWrite(bomba, 0);
+    }
+
+  #endif
+  
 
 }
 
